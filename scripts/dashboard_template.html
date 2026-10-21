@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Race to A&amp;E</title>
+<meta name="description" content="How quickly can people in six European capitals reach an emergency department? Watch drive times spread along the road network from every A&E at once.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='14' fill='%231e1f22'/><path d='M40 20h20v20h20v20H60v20H40V60H20V40h20z' fill='%23fb8761'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Overpass:wght@600;800&display=swap" rel="stylesheet">
+<script>window.RACE_MISSING = [];</script>
+<script src="data/meta.js" onerror="RACE_MISSING.push('meta')"></script>
+<style>
+  :root {
+    --bg: #16171a; --panel: #1e1f22; --raise: #26282c; --ink: #EDEFF0; --muted: #A3ABB1; --line: #3a3d42;
+    --hot: #fec287; --accent: #5CC2A6; --focus: #8ab4f8;
+    --display: "Overpass", "Arial Narrow", Arial, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--body); font-size: 15px; line-height: 1.5; color: var(--ink); background: var(--bg);
+    display: grid; grid-template-columns: 410px 1fr; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  #panel { grid-column: 1; grid-row: 1; height: 100vh; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line);
+    padding: max(24px, env(safe-area-inset-top)) 24px 28px; z-index: 2; }
+  #mapwrap { grid-column: 2; grid-row: 1; position: relative; height: 100vh; background: var(--bg); overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+
+  h1 { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1.02; margin: 0; letter-spacing: -0.01em; }
+  .zebra { height: 12px; margin: 14px 0 16px; width: 168px; background: repeating-linear-gradient(90deg, var(--ink) 0 18px, transparent 18px 30px); }
+  .lede { font-size: 16.5px; margin: 0; }
+  .lede b { font-family: var(--display); font-weight: 800; font-size: 19px; color: var(--hot); }
+  section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h2 { font-family: var(--display); font-weight: 800; font-size: 18px; margin: 0 0 10px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--raise); border-radius: 999px; padding: 5px 13px; font-size: 14px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); font-weight: 700; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--raise); }
+  .seg button { flex: 1; border: 0; background: none; padding: 7px 10px; font-size: 13.5px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .player { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 12px; }
+  .play { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--hot); color: #1e1f22; font-size: 17px; cursor: pointer; font-weight: 800; }
+  input[type=range] { width: 100%; accent-color: var(--hot); }
+  .tnum { font-family: var(--display); font-weight: 800; font-size: 18px; min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .tile { background: var(--raise); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .tile b { display: block; font-family: var(--display); font-weight: 800; font-size: 23px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile span { font-size: 12px; color: var(--muted); line-height: 1.25; display: block; }
+  .facts { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  .chart svg { width: 100%; display: block; overflow: visible; }
+  .chart text { fill: var(--muted); font-size: 10.5px; font-family: var(--body); }
+  .rank { list-style: none; margin: 8px 0 0; padding: 0; }
+  .rank li { display: grid; grid-template-columns: 72px 1fr 42px; gap: 8px; align-items: center; font-size: 13.5px; padding: 3px 0; cursor: pointer; }
+  .rank .bar { height: 8px; background: var(--raise); border-radius: 4px; overflow: hidden; }
+  .rank .bar i { display: block; height: 100%; background: #6d7378; border-radius: 4px; }
+  .rank li.on { font-weight: 700; }
+  .rank li.on .bar i { background: var(--hot); }
+  .rank .v { text-align: right; font-variant-numeric: tabular-nums; }
+  .here { margin-top: 10px; background: var(--raise); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .here b { font-family: var(--display); font-weight: 800; font-size: 20px; color: var(--hot); }
+  .about p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .about a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  .problem { background: #3a2f1a; border: 1px solid #8a6d2f; border-radius: 6px; padding: 12px 14px; font-size: 14px; margin-top: 14px; }
+
+  .clock { position: absolute; left: 22px; bottom: 54px; z-index: 3; pointer-events: none; text-shadow: 0 0 12px #000; }
+  .clock .m { font-family: var(--display); font-weight: 800; font-size: 72px; line-height: 0.9; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .clock .m small { font-size: 26px; margin-left: 6px; }
+  .clock .s { font-size: 15px; margin-top: 6px; }
+  .clock .s b { color: var(--hot); font-family: var(--display); font-size: 19px; }
+  .cityname { position: absolute; left: 22px; top: 18px; z-index: 3; font-family: var(--display); font-weight: 800; font-size: 30px; pointer-events: none; text-shadow: 0 0 10px #000; }
+  .legend { position: absolute; right: 12px; bottom: 30px; z-index: 3; background: rgba(30,31,34,.88); border-radius: 8px; padding: 8px 11px; font-size: 12px; }
+  .legend .row { display: flex; align-items: center; gap: 7px; margin: 2px 0; }
+  .legend i { width: 20px; height: 4px; border-radius: 2px; display: inline-block; }
+  .legend .h { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid #1e1f22; }
+  .brand { position: absolute; z-index: 3; left: 22px; bottom: 14px; font-family: var(--display); font-weight: 800; font-size: 15px; color: #fff;
+    background: #22272B; padding: 3px 9px 2px; border-radius: 4px; border-bottom: 3px solid var(--accent); text-decoration: none; }
+  .attrib { position: absolute; right: 8px; bottom: 6px; z-index: 3; font-size: 10.5px; color: var(--muted); }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; z-index: 4; color: var(--muted); pointer-events: none; }
+
+  @media (max-width: 820px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 58vh auto; }
+    #mapwrap { grid-column: 1; grid-row: 1; height: 58vh; }
+    #panel { grid-column: 1; grid-row: 2; height: auto; border-right: 0; }
+    .clock .m { font-size: 48px; } .cityname { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div id="mapwrap" aria-label="Animated map of drive times to emergency departments">
+  <div id="map"></div>
+  <div class="cityname" id="cityname"></div>
+  <div class="clock" aria-live="off"><div class="m" id="clockm">0<small>min</small></div><div class="s" id="clocks"></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="loading" id="loading">Loading…</div>
+  <a class="brand" href="https://etymo.co.uk" target="_blank" rel="noopener" title="Made by Eriola Trungu Impersimi">@ET</a>
+  <div class="attrib">© OpenStreetMap contributors · GHSL · Eurostat GISCO · Basemap © Esri</div>
+</div>
+
+<aside id="panel">
+  <header>
+    <h1>Race to A&amp;E</h1>
+    <div class="zebra" aria-hidden="true"></div>
+    <p class="lede" id="lede">Loading…</p>
+    <div class="problem" id="problem" hidden></div>
+  </header>
+
+  <section>
+    <h2>Choose a capital</h2>
+    <div class="chips" id="cities" role="group" aria-label="City"></div>
+    <div class="player">
+      <button class="play" id="play" aria-label="Play">&#9654;</button>
+      <input type="range" id="time" min="0" max="30" step="0.1" value="0" aria-label="Minutes">
+      <span class="tnum" id="tnum">0 min</span>
+    </div>
+    <p class="hint" style="margin-top:8px">The network lights up from every emergency department at once. Streets light up when an A&amp;E is that many minutes' drive away. The last streets to light up are the gaps.</p>
+    <h2 style="margin-top:14px">Traffic</h2>
+    <div class="seg" id="traffic" role="group" aria-label="Traffic">
+      <button data-v="free" aria-pressed="true">Free-flowing</button>
+      <button data-v="busy" aria-pressed="false">Busy (journeys 50% longer)</button>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="stats-h">Within reach</h2>
+    <div class="tiles" id="tiles"></div>
+    <p class="facts" id="facts"></p>
+    <div class="here" id="here">Click anywhere on the map to see how far the nearest A&amp;E is from there.</div>
+  </section>
+
+  <section>
+    <h2>Six capitals compared</h2>
+    <p class="hint" id="chart-h">Share of people who can reach an A&amp;E within each number of minutes.</p>
+    <div class="chart"><svg id="curves" viewBox="0 0 360 190" role="img" aria-label="Coverage curves for every city"></svg></div>
+    <p class="hint" style="margin:12px 0 0" id="rank-h"></p>
+    <ul class="rank" id="rank"></ul>
+  </section>
+
+  <section class="about">
+    <h2>About</h2>
+    <p><b>Where:</b> each city's urban centre, defined the same way everywhere (the UN and Eurostat "Degree of Urbanisation": contiguous 1 km² cells with at least 1,500 people). Administrative boundaries differ too much to compare cities fairly.</p>
+    <p><b>Who:</b> people per 100 m cell from the EU's Global Human Settlement Layer (2025). <b>Hospitals:</b> emergency departments from Eurostat's healthcare register (national health ministries and statistics offices), and from OpenStreetMap for London. Hospitals up to 8 km outside the urban centre count.</p>
+    <p><b>How:</b> drive times along OpenStreetMap roads at typical free-flow urban speeds, the same for every city, respecting one-way streets and lower posted limits. "Busy" makes every journey 50% longer. Ambulances on blue lights can be faster; rush hour can be slower. These are journeys <i>to</i> hospital, not ambulance response times.</p>
+    <p id="repo"></p>
+    <p>Made by <b>Eriola Trungu Impersimi</b> · @ET · <span id="built"></span></p>
+  </section>
+</aside>
+
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var R = window.RACE || {}, META = R.meta;
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function pct(x) { return x == null || isNaN(x) ? "–" : Math.round(100 * x) + "%"; }
+  if (!META || !window.deck) {
+    el("lede").textContent = "The dashboard data isn't here yet.";
+    el("loading").textContent = "";
+    var p = el("problem"); p.hidden = false;
+    p.innerHTML = !window.deck ? "The map library couldn't load. Check your connection and reload." :
+      "Missing <code>data/meta.js</code>. Run the scripts in order (see the README), then open <code>docs/index.html</code>.";
+    return;
+  }
+  var CITIES = META.cities, COLORS = META.colors.map(function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; });
+  var BANDS = META.bands, MAXT = 30, SECONDS = 11;
+  var S = { city: CITIES[0].key, busy: false, t: 0, playing: false, data: {}, here: null };
+  function factor() { return S.busy ? META.busy : 1; }
+  function cityMeta(k) { return CITIES.filter(function (c) { return c.key === k; })[0]; }
+  function bandColor(t) { for (var i = 0; i < BANDS.length; i++) if (t < BANDS[i]) return COLORS[i]; return COLORS[COLORS.length - 1]; }
+  function shareAt(c, minutes) {        // coverage curve at `minutes` of (possibly busy) driving
+    var x = c.curve[0], y = c.curve[1], m = minutes / factor();
+    if (m <= x[0]) return 0;
+    for (var i = 1; i < x.length; i++) if (m <= x[i]) return y[i - 1] + (y[i] - y[i - 1]) * (m - x[i - 1]) / (x[i] - x[i - 1]);
+    return y[y.length - 1];
+  }
+
+  // ---------- legend ----------
+  var labels = ["Under 5 min", "5–10 min", "10–15 min", "15–20 min", "20–30 min", "Over 30 min"];
+  el("legend").innerHTML = "<b>Drive to nearest A&amp;E</b>" + META.colors.map(function (c, i) {
+    return '<div class="row"><i style="background:' + c + '"></i>' + labels[i] + "</div>"; }).join("") +
+    '<div class="row"><i class="h"></i>Emergency department</div>';
+
+  // ---------- map ----------
+  var ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+  function tiles(id, name, opacity) {
+    return new deck.TileLayer({ id: id, data: ESRI + name + "/MapServer/tile/{z}/{y}/{x}", minZoom: 0, maxZoom: 16, tileSize: 256, opacity: opacity,
+      renderSubLayers: function (props) { var b = props.tile.boundingBox;
+        return new deck.BitmapLayer(props, { data: null, image: props.data, bounds: [b[0][0], b[0][1], b[1][0], b[1][1]] }); } });
+  }
+  var base = tiles("base", "World_Dark_Gray_Base", 1), labelsLayer = tiles("labels", "World_Dark_Gray_Reference", 0.75);
+  var view = { longitude: CITIES[0].lon, latitude: CITIES[0].lat, zoom: 9.6, pitch: 0, bearing: 0 };
+  var map = new deck.Deck({
+    parent: el("map"), initialViewState: view, controller: true, useDevicePixels: Math.min(window.devicePixelRatio || 1, 2),
+    onViewStateChange: function (e) { view = e.viewState; },
+    onClick: function (info) { if (info.coordinate) clickAt(info.coordinate); },
+    getTooltip: function (info) { return info.object && info.layer && info.layer.id === "hospitals" ? { text: info.object[2] } : null; },
+    layers: [base]
+  });
+
+  // ---------- city data ----------
+  function loadCity(key) {
+    if (S.data[key]) return Promise.resolve(S.data[key]);
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = "data/" + key + ".js";
+      s.onload = function () { res(S.data[key] = prepare(R[key])); delete R[key]; };
+      s.onerror = function () { rej(new Error("Couldn't load data/" + key + ".js")); };
+      document.head.appendChild(s);
+    });
+  }
+  function prepare(raw) {
+    var trips = raw.edges.map(function (e) {
+      var lon = e[2], lat = e[3], path = [[lon / 1e5, lat / 1e5]];
+      for (var i = 4; i < e.length; i += 2) { lon += e[i]; lat += e[i + 1]; path.push([lon / 1e5, lat / 1e5]); }
+      var t0 = e[0] / 10, t1 = Math.max(e[1] / 10, t0), cum = [0], tot = 0;
+      for (var j = 1; j < path.length; j++) { tot += Math.hypot((path[j][0] - path[j - 1][0]) * 0.65, path[j][1] - path[j - 1][1]); cum.push(tot); }
+      return { path: path, t0: t0, ts: cum.map(function (c) { return t0 + (tot ? c / tot : 0) * (t1 - t0); }) };
+    });
+    var pts = [];   // first vertex of every road, for "how far from here?"
+    trips.forEach(function (tr) { pts.push(tr.path[0][0], tr.path[0][1], tr.t0); });
+    return { trips: trips, pts: pts, hospitals: raw.hospitals, outline: raw.outline };
+  }
+
+  function layers() {
+    var d = S.data[S.city], f = factor(), out = [base];
+    if (d) {
+      out.push(new deck.PathLayer({ id: "outline", data: d.outline, getPath: function (x) { return x; }, getColor: [200, 205, 210, 110], widthMinPixels: 1 }));
+      out.push(new deck.PathLayer({ id: "net-" + S.city, data: d.trips, getPath: function (x) { return x.path; },
+        getColor: [62, 66, 72], widthMinPixels: 1, widthMaxPixels: 2, getWidth: 10 }));
+      out.push(new deck.TripsLayer({
+        id: "trips-" + S.city, data: d.trips, getPath: function (x) { return x.path; },
+        getTimestamps: function (x) { return x.ts.map(function (v) { return v * f; }); },
+        getColor: function (x) { return bandColor(x.t0 * f); }, opacity: 0.95, widthMinPixels: 1.6, widthMaxPixels: 4, getWidth: 18,
+        capRounded: true, jointRounded: true, fadeTrail: false, trailLength: 1e6, currentTime: S.t,
+        updateTriggers: { getTimestamps: f, getColor: f }
+      }));
+      out.push(labelsLayer);
+      out.push(new deck.ScatterplotLayer({ id: "hospitals", data: d.hospitals, getPosition: function (h) { return [h[0], h[1]]; }, pickable: true,
+        getFillColor: [255, 255, 255], getLineColor: [30, 31, 34], lineWidthMinPixels: 2, stroked: true, radiusMinPixels: 5, radiusMaxPixels: 9, getRadius: 120 }));
+      if (S.here) out.push(new deck.ScatterplotLayer({ id: "here", data: [S.here], getPosition: function (h) { return h; },
+        getFillColor: [92, 194, 166], getLineColor: [255, 255, 255], stroked: true, lineWidthMinPixels: 2, radiusMinPixels: 7, getRadius: 80 }));
+    }
+    return out;
+  }
+  function redraw() { map.setProps({ layers: layers() }); }
+
+  // ---------- clock + numbers ----------
+  function setTime(t) {
+    S.t = t;
+    el("time").value = t;
+    el("tnum").textContent = t.toFixed(t < 10 ? 1 : 0) + " min";
+    el("clockm").innerHTML = Math.floor(t) + "<small>min</small>";
+    var c = cityMeta(S.city);
+    el("clocks").innerHTML = "<b>" + pct(shareAt(c, t)) + "</b> of people reached";
+    redraw();
+    drawCurves();
+  }
+  function stats() {
+    var c = cityMeta(S.city), s = c.summary, b = S.busy;
+    el("cityname").textContent = c.name;
+    el("stats-h").textContent = "Within reach in " + c.name + (b ? " (busy traffic)" : "");
+    el("tiles").innerHTML = [10, 15, 20].map(function (m) {
+      return '<div class="tile"><b>' + pct(b ? shareAt(c, m) : s["within_" + m]) + "</b><span>within " + m + " minutes</span></div>"; }).join("");
+    el("facts").innerHTML = (s.population / 1e6).toFixed(1) + " million people in the urban centre · " + s.hospitals + " emergency departments · typical drive " +
+      (s.median_minutes * factor()).toFixed(1) + " min · 1 in 10 people drive " + (s.p90_minutes * factor()).toFixed(0) + "+ min";
+    var best = CITIES.slice().sort(function (a, b2) { return b2.summary.within_15 - a.summary.within_15; });
+    el("lede").innerHTML = "In <b>" + esc(c.name) + "</b>, <b>" + pct(b ? shareAt(c, 15) : s.within_15) + "</b> of people can drive to an emergency department in 15 minutes" +
+      (b ? " in busy traffic." : " when the roads are clear.") + (CITIES.length > 1 ? " Best of the " + CITIES.length + ": " + esc(best[0].name) + "." : "");
+    el("rank-h").textContent = "Within 15 minutes, " + (b ? "busy traffic" : "free-flowing traffic");
+    var rows = CITIES.slice().map(function (x) { return [x, b ? shareAt(x, 15) : x.summary.within_15]; }).sort(function (p, q) { return q[1] - p[1]; });
+    el("rank").innerHTML = rows.map(function (r) {
+      return '<li data-k="' + r[0].key + '"' + (r[0].key === S.city ? ' class="on"' : "") + '><span>' + esc(r[0].name) + '</span><span class="bar"><i style="width:' +
+        (100 * r[1]).toFixed(1) + '%"></i></span><span class="v">' + pct(r[1]) + "</span></li>"; }).join("");
+  }
+  function drawCurves() {
+    var W = 360, H = 170, L = 30, B = 20, x = function (m) { return L + (W - L - 6) * m / MAXT; }, y = function (s) { return H - B - (H - B - 6) * s; };
+    var g = "";
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (s) { g += '<line x1="' + L + '" x2="' + (W - 6) + '" y1="' + y(s) + '" y2="' + y(s) + '" stroke="#2c2f33"/><text x="' + (L - 5) + '" y="' + (y(s) + 3.5) + '" text-anchor="end">' + Math.round(100 * s) + "%</text>"; });
+    [0, 5, 10, 15, 20, 25, 30].forEach(function (m) { g += '<text x="' + x(m) + '" y="' + (H - 4) + '" text-anchor="middle">' + m + "</text>"; });
+    g += '<text x="' + (W - 6) + '" y="' + (H + 10) + '" text-anchor="end">minutes</text>';
+    var sel = null;
+    CITIES.forEach(function (c) {
+      var d = "", on = c.key === S.city;
+      for (var m = 0; m <= MAXT; m += 0.5) d += (m ? "L" : "M") + x(m).toFixed(1) + "," + y(shareAt(c, m)).toFixed(1);
+      var path = '<path d="' + d + '" fill="none" stroke="' + (on ? "#fec287" : "#6d7378") + '" stroke-width="' + (on ? 2.6 : 1.3) + '"><title>' + esc(c.name) + "</title></path>";
+      if (on) sel = path; else g += path;
+    });
+    var c0 = cityMeta(S.city), sv = shareAt(c0, S.t);
+    g += (sel || "") + '<line x1="' + x(S.t) + '" x2="' + x(S.t) + '" y1="6" y2="' + (H - B) + '" stroke="#EDEFF0" stroke-dasharray="3 3"/>' +
+      '<circle cx="' + x(S.t) + '" cy="' + y(sv) + '" r="4" fill="#fec287"/><text x="' + (x(S.t) + 6) + '" y="' + (y(sv) - 6) + '" style="fill:#EDEFF0;font-weight:700">' + esc(c0.name) + " " + pct(sv) + "</text>";
+    el("curves").innerHTML = g;
+  }
+
+  // ---------- play ----------
+  var last = null;
+  function tick(now) {
+    if (!S.playing) return;
+    if (last != null) {
+      var t = S.t + (now - last) / 1000 * (MAXT / SECONDS);
+      if (t >= MAXT) { setTime(MAXT); S.playing = false; el("play").innerHTML = "&#8635;"; el("play").setAttribute("aria-label", "Replay"); last = null; return; }
+      setTime(t);
+    }
+    last = now;
+    requestAnimationFrame(tick);
+  }
+  function play() {
+    if (S.t >= MAXT) setTime(0);
+    S.playing = true; last = null;
+    el("play").innerHTML = "&#10074;&#10074;"; el("play").setAttribute("aria-label", "Pause");
+    requestAnimationFrame(tick);
+  }
+  function pause() { S.playing = false; el("play").innerHTML = "&#9654;"; el("play").setAttribute("aria-label", "Play"); }
+  el("play").addEventListener("click", function () { if (S.playing) pause(); else play(); });
+  el("time").addEventListener("input", function () { pause(); setTime(+this.value); });
+
+  // ---------- cities ----------
+  el("cities").innerHTML = CITIES.map(function (c) { return '<button class="chip" data-k="' + c.key + '" aria-pressed="false">' + esc(c.name) + "</button>"; }).join("");
+  el("cities").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) selectCity(b.dataset.k, true); });
+  el("rank").addEventListener("click", function (e) { var li = e.target.closest("li"); if (li) selectCity(li.dataset.k, true); });
+  function fit(c) {
+    var b = c.bounds, vp = new deck.WebMercatorViewport({ width: el("map").clientWidth || 800, height: el("map").clientHeight || 600 });
+    var f = vp.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 30 });
+    view = { longitude: f.longitude, latitude: f.latitude, zoom: f.zoom, pitch: 0, bearing: 0, transitionDuration: 900, transitionInterpolator: new deck.FlyToInterpolator() };
+    map.setProps({ initialViewState: view });
+  }
+  function selectCity(key, autoplay) {
+    S.city = key; S.here = null;
+    el("here").innerHTML = "Click anywhere on the map to see how far the nearest A&amp;E is from there.";
+    el("cities").querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.k === key)); });
+    var c = cityMeta(key);
+    fit(c); stats(); pause(); setTime(0);
+    el("loading").textContent = "Loading " + c.name + "…"; el("loading").style.display = "grid";
+    loadCity(key).then(function () {
+      el("loading").style.display = "none";
+      if (S.city !== key) return;
+      redraw();
+      if (autoplay) setTimeout(play, 700);
+    }).catch(function (err) { el("loading").textContent = err.message; });
+  }
+
+  el("traffic").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    el("traffic").querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    S.busy = b.dataset.v === "busy";
+    stats(); setTime(S.t); if (S.here) clickAt(S.here);
+  });
+
+  // ---------- from here ----------
+  function clickAt(ll) {
+    var d = S.data[S.city]; if (!d) return;
+    var p = d.pts, best = -1, bd = Infinity, kx = Math.cos(ll[1] * Math.PI / 180);
+    for (var i = 0; i < p.length; i += 3) {
+      var dx = (p[i] - ll[0]) * kx, dy = p[i + 1] - ll[1], dd = dx * dx + dy * dy;
+      if (dd < bd) { bd = dd; best = i; }
+    }
+    var metres = Math.sqrt(bd) * 111320;
+    S.here = ll; redraw();
+    if (metres > 1500) { el("here").textContent = "That's outside the area this map covers."; return; }
+    var t = (p[best + 2] + metres / 250) * factor();   // ~15 km/h to reach the road
+    el("here").innerHTML = "From here: <b>" + Math.max(1, Math.round(t)) + " min</b> to the nearest A&amp;E" + (S.busy ? " in busy traffic" : " with clear roads") + ".";
+  }
+
+  if (META.repo) el("repo").innerHTML = 'Code and method: <a href="' + esc(META.repo) + '" target="_blank" rel="noopener">' + esc(META.repo.replace(/^https?:\/\//, "")) + "</a>";
+  el("built").textContent = "Built " + META.built;
+  var start = (location.hash || "").slice(1);
+  selectCity(cityMeta(start) ? start : CITIES[0].key, true);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+/data/
+*.part
+__pycache__/
+.venv/

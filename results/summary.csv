@@ -1,0 +1,7 @@
+city,name,population,area_km2,hospitals,people_per_hospital,within_10,within_15,within_20,within_30,within_15_busy,median_minutes,p90_minutes,hospital_source
+london,London,10377155.1753,1622,35,296490.1479,0.77,0.956,0.9994,1.0,0.77,7.333,12.5475,OpenStreetMap (emergency=yes)
+paris,Paris,9255818.5111,1351,71,130363.641,0.9258,0.9887,0.9991,1.0,0.9258,5.0027,9.2826,Eurostat GISCO healthcare 2023
+berlin,Berlin,3547594.8451,679,33,107502.8741,0.8455,0.9671,0.997,1.0,0.8455,5.8537,11.4731,OpenStreetMap (emergency=yes)
+madrid,Madrid,5675975.2776,676,30,189199.1759,0.782,0.9902,0.999,1.0,0.782,6.8264,11.8092,OpenStreetMap (emergency=yes)
+rome,Rome,2392651.9694,403,21,113935.8081,0.8114,0.9535,0.9928,1.0,0.8114,5.9244,12.2463,OpenStreetMap (emergency=yes)
+athens,Athens,3158571.9721,384,45,70190.4883,0.9406,0.9974,1.0,1.0,0.9406,4.2737,8.7784,Eurostat GISCO healthcare 2023
