@@ -195,7 +195,7 @@
   var base = tiles("base", "World_Dark_Gray_Base", 1), labelsLayer = tiles("labels", "World_Dark_Gray_Reference", 0.75);
   var view = { longitude: CITIES[0].lon, latitude: CITIES[0].lat, zoom: 9.6, pitch: 0, bearing: 0 };
   var map = new deck.Deck({
-    parent: el("map"), initialViewState: view, controller: true, useDevicePixels: Math.min(window.devicePixelRatio || 1, 2),
+    parent: el("map"), initialViewState: view, controller: true, useDevicePixels: Math.min(window.devicePixelRatio || 1, 1.5),
     onViewStateChange: function (e) { view = e.viewState; },
     onClick: function (info) { if (info.coordinate) clickAt(info.coordinate); },
     getTooltip: function (info) { return info.object && info.layer && info.layer.id === "hospitals" ? { text: info.object[2] } : null; },
@@ -213,31 +213,56 @@
       document.head.appendChild(s);
     });
   }
+  // Roads go straight into typed arrays that deck.gl hands to the GPU as they are,
+  // which keeps even London's quarter of a million roads quick to load and draw.
   function prepare(raw) {
-    var trips = raw.edges.map(function (e) {
-      var lon = e[2], lat = e[3], path = [[lon / 1e5, lat / 1e5]];
-      for (var i = 4; i < e.length; i += 2) { lon += e[i]; lat += e[i + 1]; path.push([lon / 1e5, lat / 1e5]); }
-      var t0 = e[0] / 10, t1 = Math.max(e[1] / 10, t0), cum = [0], tot = 0;
-      for (var j = 1; j < path.length; j++) { tot += Math.hypot((path[j][0] - path[j - 1][0]) * 0.65, path[j][1] - path[j - 1][1]); cum.push(tot); }
-      return { path: path, t0: t0, ts: cum.map(function (c) { return t0 + (tot ? c / tot : 0) * (t1 - t0); }) };
-    });
-    var pts = [];   // first vertex of every road, for "how far from here?"
-    trips.forEach(function (tr) { pts.push(tr.path[0][0], tr.path[0][1], tr.t0); });
-    return { trips: trips, pts: pts, hospitals: raw.hospitals, outline: raw.outline };
+    var E = raw.edges, n = E.length, nv = 0, i, k;
+    for (i = 0; i < n; i++) nv += (E[i].length - 2) / 2;
+    var pos = new Float32Array(nv * 2), ts = new Float32Array(nv), starts = new Uint32Array(n), t0s = new Float32Array(n);
+    var vEdge = new Uint32Array(nv), pts = new Float32Array(n * 3), v = 0;
+    for (i = 0; i < n; i++) {
+      var e = E[i], t0 = e[0] / 10, t1 = Math.max(e[1] / 10, t0), lon = e[2], lat = e[3], first = v, tot = 0;
+      starts[i] = v; t0s[i] = t0;
+      pos[2 * v] = lon / 1e5; pos[2 * v + 1] = lat / 1e5; ts[v] = 0; vEdge[v] = i; v++;
+      for (k = 4; k < e.length; k += 2) {
+        lon += e[k]; lat += e[k + 1];
+        pos[2 * v] = lon / 1e5; pos[2 * v + 1] = lat / 1e5;
+        tot += Math.hypot((pos[2 * v] - pos[2 * v - 2]) * 0.65, pos[2 * v + 1] - pos[2 * v - 1]);
+        ts[v] = tot; vEdge[v] = i; v++;
+      }
+      for (k = first; k < v; k++) ts[k] = t0 + (tot ? ts[k] / tot : 0) * (t1 - t0);
+      pts[3 * i] = pos[2 * first]; pts[3 * i + 1] = pos[2 * first + 1]; pts[3 * i + 2] = t0;
+    }
+    var d = { n: n, pos: pos, ts: ts, starts: starts, t0s: t0s, vEdge: vEdge, pts: pts,
+              hospitals: raw.hospitals, outline: raw.outline, colorFactor: null };
+    d.net = { length: n, startIndices: starts, attributes: { getPath: { value: pos, size: 2 } } };
+    colorFor(d, factor());
+    return d;
+  }
+  function colorFor(d, f) {          // colour of every vertex: the band its road is reached in
+    if (d.colorFactor === f) return;
+    var c = d.colors || (d.colors = new Uint8Array(d.ts.length * 4)), cache = {};
+    for (var v = 0; v < d.ts.length; v++) {
+      var t = d.t0s[d.vEdge[v]] * f, b = 0;
+      while (b < BANDS.length && t >= BANDS[b]) b++;
+      var col = COLORS[b];
+      c[4 * v] = col[0]; c[4 * v + 1] = col[1]; c[4 * v + 2] = col[2]; c[4 * v + 3] = 245;
+    }
+    d.colorFactor = f;
+    d.trips = { length: d.n, startIndices: d.starts, attributes: {
+      getPath: { value: d.pos, size: 2 }, getTimestamps: { value: d.ts, size: 1 },
+      getColor: { value: c, size: 4, normalized: true } } };
   }
 
   function layers() {
     var d = S.data[S.city], f = factor(), out = [base];
     if (d) {
+      colorFor(d, f);
       out.push(new deck.PathLayer({ id: "outline", data: d.outline, getPath: function (x) { return x; }, getColor: [200, 205, 210, 110], widthMinPixels: 1 }));
-      out.push(new deck.PathLayer({ id: "net-" + S.city, data: d.trips, getPath: function (x) { return x.path; },
-        getColor: [62, 66, 72], widthMinPixels: 1, widthMaxPixels: 2, getWidth: 10 }));
+      out.push(new deck.PathLayer({ id: "net-" + S.city, data: d.net, _pathType: "open", getColor: [62, 66, 72], widthUnits: "pixels", getWidth: 1 }));
       out.push(new deck.TripsLayer({
-        id: "trips-" + S.city, data: d.trips, getPath: function (x) { return x.path; },
-        getTimestamps: function (x) { return x.ts.map(function (v) { return v * f; }); },
-        getColor: function (x) { return bandColor(x.t0 * f); }, opacity: 0.95, widthMinPixels: 1.6, widthMaxPixels: 4, getWidth: 18,
-        capRounded: true, jointRounded: true, fadeTrail: false, trailLength: 1e6, currentTime: S.t,
-        updateTriggers: { getTimestamps: f, getColor: f }
+        id: "trips-" + S.city, data: d.trips, _pathType: "open", widthUnits: "pixels", getWidth: 2.2,
+        fadeTrail: false, trailLength: 1e6, currentTime: S.t / f   // busy traffic: the same spread, slowed down
       }));
       out.push(labelsLayer);
       out.push(new deck.ScatterplotLayer({ id: "hospitals", data: d.hospitals, getPosition: function (h) { return [h[0], h[1]]; }, pickable: true,

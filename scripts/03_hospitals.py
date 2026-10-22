@@ -24,6 +24,9 @@ Outputs:
     results/hospitals_<city>.csv           the same, to review
 """
 
+import os
+from pathlib import Path
+
 import geopandas as gpd
 import pandas as pd
 
@@ -95,7 +98,7 @@ def main():
         cfg = race.CITIES[city]
         log(f"== {cfg['name']} ==")
         area, _ = search_area(city)
-        override = CONFIG / "hospitals" / f"{city}.csv"
+        override = Path(os.environ.get("RACE_HOSPITALS") or CONFIG / "hospitals") / f"{city}.csv"
         if override.exists():
             h = pd.read_csv(override)
             h["source"] = h.get("source", f"config/hospitals/{city}.csv")

@@ -57,7 +57,7 @@ There's no dependence on the public Overpass server, which is often overloaded. 
 | Paris, Berlin, Madrid, Rome, Athens | [Eurostat GISCO healthcare services](https://ec.europa.eu/eurostat/web/gisco/geodata/basic-services) (national health ministries and statistics offices), hospitals with `emergency = yes` |
 | London | OpenStreetMap hospitals tagged `emergency=yes` (the UK isn't in GISCO) |
 
-If GISCO has no emergency flags for a country, the script falls back to OpenStreetMap and says so. Hospitals up to 8 km outside the urban centre count. Sites within 300 m are merged. **Review `results/hospitals_<city>.csv`**; to correct a list, copy it to `config/hospitals/<city>.csv`, edit and re-run step 3.
+If GISCO has no emergency flags for a country, the script falls back to OpenStreetMap and says so (in the first run this happened for Berlin, Madrid and Rome). OpenStreetMap's `emergency=yes` is sometimes used for eye hospitals, clinics or closed A&Es, so the London, Madrid and Rome lists were reviewed by hand: `config/hospitals/` holds the cleaned lists and `config/hospitals/REMOVED.md` says what was taken out and why. Hospitals up to 8 km outside the urban centre count. Sites within 300 m are merged. **Review `results/hospitals_<city>.csv`**; to correct a list, copy it to `config/hospitals/<city>.csv`, edit and re-run step 3.
 
 ### Step 4: drive times
 
@@ -81,7 +81,7 @@ Writes `docs/` (one page plus a data file per city, loaded only when the city is
 
 ### Step 7: videos
 
-`videos/race_to_ae_<city>.mp4`: 1080 × 1080, about 13 seconds, ready for LinkedIn, plus a still of the last frame. `--seconds` and `--size` change the length and size.
+`videos/race_to_ae_<city>.mp4`: 1080 × 1080, about 13 seconds, plus a still of the last frame. `videos/race_to_ae_six_capitals.mp4`: all six racing side by side in one video (LinkedIn takes one video per post), also copied to `docs/media/` for the blog. `--seconds` and `--size` change the length and size; `--grid-only` remakes just the six-city video.
 
 ### Step 8: write-up
 

@@ -11,17 +11,23 @@ Usage (from the project folder, after step 4):
     python scripts/07_make_videos.py
     python scripts/07_make_videos.py --cities athens --seconds 8 --size 720
 
+    python scripts/07_make_videos.py --grid-only     # just the six-city video, from city videos already made
+
 Outputs:
     videos/race_to_ae_<city>.mp4
     videos/race_to_ae_<city>.png
+    videos/race_to_ae_six_capitals.mp4   all cities racing side by side (one video for one LinkedIn post)
+    docs/media/race_to_ae_six_capitals.mp4   the same, for the blog post
 """
+
+import shutil
 
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
 import race
-from common import CONFIG, OUT, VIDEOS, Timer, chosen, city_args, log, need, read_json
+from common import CONFIG, DOCS, OUT, VIDEOS, Timer, chosen, city_args, log, need, read_json
 
 BG = (22, 23, 26)
 NET = (52, 55, 60)
@@ -157,11 +163,84 @@ def render_city(city, seconds=10, size=1080, fps=30):
     return out
 
 
+def make_grid(cities, size=1080, fps=30):
+    """All six races side by side (3 x 2), one square video: LinkedIn takes one video per post."""
+    import imageio_ffmpeg
+    files = [VIDEOS / f"race_to_ae_{c}.mp4" for c in cities]
+    files = [f for f in files if f.exists()]
+    if len(files) < 2:
+        return None
+    cols = 3 if len(files) > 4 else 2
+    rows = int(np.ceil(len(files) / cols))
+    tile = size // cols
+    head = int(0.12 * size)
+    H = head + rows * tile + int(0.11 * size)
+    H += H % 2
+    readers = [imageio_ffmpeg.read_frames(str(f)) for f in files]
+    metas = [next(r) for r in readers]
+    f_title = font("Overpass-Variable.ttf", int(0.045 * size))
+    f_sub = font("AtkinsonHyperlegible-Regular.ttf", int(0.022 * size))
+    f_small = font("AtkinsonHyperlegible-Regular.ttf", int(0.02 * size))
+    colors = [hex_rgb(c) for c in race.BAND_COLORS]
+    base = Image.new("RGB", (size, H), BG)
+    dr = ImageDraw.Draw(base)
+    pad = int(0.035 * size)
+    dr.text((pad, int(0.02 * size)), "Race to A&E: six European capitals", font=f_title, fill=INK)
+    dr.text((pad, int(0.02 * size) + int(0.055 * size)), "Drive time to the nearest emergency department, every A&E starting at once",
+            font=f_sub, fill=MUTED)
+    y = head + rows * tile + int(0.025 * size)
+    labels = ["< 5 min", "5–10", "10–15", "15–20", "20–30", "30+"]
+    x = pad
+    for c, lab in zip(colors, labels):
+        dr.rounded_rectangle([x, y + int(0.009 * size), x + int(0.03 * size), y + int(0.018 * size)], radius=3, fill=c)
+        dr.text((x + int(0.037 * size), y), lab, font=f_small, fill=INK)
+        x += int(0.037 * size) + int(dr.textlength(lab, font=f_small)) + int(0.03 * size)
+    brand = "@ET · etymo.co.uk/race-to-ae"
+    dr.text((size - pad - dr.textlength(brand, font=f_small), y + int(0.045 * size)), brand, font=f_small, fill=MUTED)
+    out = VIDEOS / "race_to_ae_six_capitals.mp4"
+    writer = imageio_ffmpeg.write_frames(str(out), (size, H), fps=fps, codec="libx264", macro_block_size=2,
+                                         pix_fmt_out="yuv420p", output_params=["-crf", "20", "-movflags", "+faststart"])
+    writer.send(None)
+    last = [None] * len(files)
+    frame = None
+    while True:
+        got = False
+        for k, r in enumerate(readers):
+            try:
+                raw = next(r)
+                w, h = metas[k]["size"]
+                last[k] = Image.frombytes("RGB", (w, h), raw).resize((tile, tile), Image.LANCZOS)
+                got = True
+            except StopIteration:
+                pass                      # a shorter video holds its last frame
+        if not got:
+            break
+        frame = base.copy()
+        for k, im in enumerate(last):
+            if im is not None:
+                frame.paste(im, ((k % cols) * tile + (size - cols * tile) // 2, head + (k // cols) * tile))
+        writer.send(frame.tobytes())
+    writer.close()
+    if frame is not None:
+        frame.save(VIDEOS / "race_to_ae_six_capitals.png")
+    # a copy for the website, served by GitHub Pages with the right video type
+    media = DOCS / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(out, media / out.name)
+    shutil.copy2(VIDEOS / "race_to_ae_six_capitals.png", media / "race_to_ae_six_capitals.png")
+    return out
+
+
 def main():
     ap = city_args(__doc__)
     ap.add_argument("--seconds", type=float, default=10, help="length of the spread (plus a short hold)")
     ap.add_argument("--size", type=int, default=1080)
+    ap.add_argument("--grid-only", action="store_true", help="only make the six-city video from existing city videos")
     args = ap.parse_args()
+    if args.grid_only:
+        out = make_grid(chosen(args), args.size)
+        log(f"  {out.name if out else 'need at least two city videos first'}")
+        return
     for city in chosen(args):
         if not (OUT / city / "summary.json").exists():
             log(f"  skipping {city}: no results")
@@ -169,6 +248,10 @@ def main():
         t = Timer()
         path = render_city(city, args.seconds, args.size)
         log(f"  {race.CITIES[city]['name']}: {path.name} ({t})")
+    t = Timer()
+    grid = make_grid(chosen(args), args.size)
+    if grid:
+        log(f"  all cities side by side: {grid.name} ({t})")
     log("\nNext: python scripts/08_write_post.py")
 
 

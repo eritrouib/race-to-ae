@@ -32,6 +32,7 @@ from common import CODE, DOCS, OUT, ROOT, Timer, city_args, chosen, log, need, r
 
 SHOW_MARGIN_M = 2000
 MAX_MIN = 40
+SIMPLIFY_DEG = 0.00002
 
 
 def write_js(path, key, obj):
@@ -58,7 +59,10 @@ def encode_edges(net, node_min, area):
             c = c[::-1]
         if not (minx <= c[0, 0] <= maxx and miny <= c[0, 1] <= maxy):
             continue
+        if len(c) > 2:   # drop vertices that change the shape by less than ~2 m: smaller files, same picture
+            c = np.asarray(shapely.simplify(shapely.LineString(c), SIMPLIFY_DEG).coords)
         q = np.round(c * 1e5).astype(np.int64)
+        q = q[np.r_[True, (np.diff(q, axis=0) != 0).any(axis=1)]]
         flat = [int(q[0, 0]), int(q[0, 1])]
         d = np.diff(q, axis=0)
         flat += d.ravel().tolist()

@@ -6,9 +6,9 @@ Usage (from the project folder, after step 5):
     python scripts/08_write_post.py
 
 Output:
-    results/post/index.qmd   copy to posts/<date>-race-to-ae/index.qmd in the website repo,
-                             then read it through and edit: some sentences change with the
-                             results, but it is a starting point, not a finished article.
+    results/post/index.qmd   copy to posts/2026-10-race-to-ae/index.qmd in the website repo,
+                             then read it through: some sentences change with the results,
+                             but it is a starting point, not a finished article.
 """
 
 from datetime import date
@@ -23,28 +23,63 @@ def p(x):
     return f"{100 * x:.0f}%"
 
 
+def p1(x):
+    return f"{100 * x:.1f}%"
+
+
 def join(items):
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
 def article(h):
     c = h["cities"]
-    order = sorted(c, key=lambda k: -c[k]["within_15"])
-    best, worst = c[order[0]], c[order[-1]]
+    keys = list(c)
+    by15 = sorted(keys, key=lambda k: -c[k]["within_15"])
+    by10 = sorted(keys, key=lambda k: -c[k]["within_10"])
+    by_med = sorted(keys, key=lambda k: c[k]["median_minutes"])
+    by_per = sorted(keys, key=lambda k: c[k]["people_per_hospital"])
     fig = f"https://raw.githubusercontent.com/{REPO}/main/figures"
+    vid = f"{SITE}/race-to-ae/media"
+    lo15, hi15 = min(c[k]["within_15"] for k in keys), max(c[k]["within_15"] for k in keys)
+    close_at_15 = hi15 - lo15 < 0.08
+    b10, w10 = c[by10[0]], c[by10[-1]]
     rows = "\n".join(
         f"| {c[k]['name']} | {c[k]['population'] / 1e6:.1f}m | {c[k]['hospitals']} | {p(c[k]['within_10'])} | "
-        f"{p(c[k]['within_15'])} | {p(c[k]['within_15_busy'])} | {c[k]['median_minutes']:.1f} | {c[k]['p90_minutes']:.0f} |"
-        for k in order)
-    drop = max(order, key=lambda k: c[k]["within_15"] - c[k]["within_15_busy"])
-    per_h = sorted(order, key=lambda k: c[k]["people_per_hospital"])
-    names = [c[k]["name"] for k in order]
-    gap = best["within_15"] - worst["within_15"]
-    spread = ("The gap between the best and the worst is small" if gap < 0.1 else
-              f"That is a gap of {100 * gap:.0f} percentage points between capitals that all think of themselves as well served")
+        f"{p1(c[k]['within_15'])} | {c[k]['median_minutes']:.1f} | {c[k]['p90_minutes']:.0f} |" for k in by10)
+    gisco = [c[k]["name"] for k in keys if "GISCO" in str(c[k].get("hospital_source", ""))]
+    osm = [c[k]["name"] for k in keys if "GISCO" not in str(c[k].get("hospital_source", ""))]
+    sources = []
+    if gisco:
+        sources.append(f"for {join(gisco)}, Eurostat's European register of healthcare services, compiled from national "
+                       "health ministries and statistics offices, which marks hospitals that provide emergency care")
+    if osm:
+        sources.append(f"for {join(osm)}, hospitals tagged with an emergency department in OpenStreetMap, which I checked by "
+                       "hand and cleaned (eye hospitals, dental and primary care clinics, a closed A&E and similar sites "
+                       "taken out)")
+    if close_at_15:
+        headline = (f"At 15 minutes the race is close: between **{p1(lo15)}** and **{p1(hi15)}** of people in every capital can "
+                    "drive to an emergency department in that time on clear roads. The real differences are in the first ten "
+                    "minutes.")
+        lesson1_title = "Lesson one: the race is won in the first ten minutes"
+        lesson1 = (f"Within ten minutes, **{p(b10['within_10'])}** of people in **{b10['name']}** can reach an A&E, against "
+                   f"**{p(w10['within_10'])}** in **{w10['name']}**. The typical (median) drive ranges from "
+                   f"{c[by_med[0]]['median_minutes']:.1f} minutes in {c[by_med[0]]['name']} to "
+                   f"{c[by_med[-1]]['median_minutes']:.1f} in {c[by_med[-1]]['name']}. For most journeys a few minutes make "
+                   "little difference; for a stroke, a heart attack or a serious bleed, they are exactly the minutes that matter.")
+    else:
+        headline = (f"In **{c[by15[0]]['name']}**, **{p(hi15)}** of people can reach an emergency department within 15 "
+                    f"minutes on clear roads; in **{c[by15[-1]]['name']}**, **{p(lo15)}**.")
+        lesson1_title = "Lesson one: not every capital is a 15-minute city for emergencies"
+        lesson1 = (f"Within ten minutes the spread is wider still: from **{p(b10['within_10'])}** in {b10['name']} to "
+                   f"**{p(w10['within_10'])}** in {w10['name']}.")
+    few, many = c[by_per[-1]], c[by_per[0]]
+    osm_count = ["none", "one", "two", "three", "four", "five", "six"][len(osm)] if len(osm) <= 6 else str(len(osm))
+    athens_note = ("\n- **Athens hospitals take turns.** Greek hospitals share emergency duty on a rota, so on any given day fewer "
+                   "emergency departments take new patients than this map assumes. On a typical day the Athens numbers would be lower."
+                   if "athens" in keys else "")
     return f'''---
 title: "Race to A&E: how quickly can you reach an emergency department in six European capitals?"
-description: "I measured the drive from every street in London, Paris, Berlin, Madrid, Rome and Athens to the nearest emergency department, and turned it into a race."
+description: "I measured the drive from where people live to the nearest emergency department in London, Paris, Berlin, Madrid, Rome and Athens, and turned it into a race."
 date: {date.today().isoformat()}
 categories: [health, network analysis, spatial analysis, Python]
 image: {fig}/six_capitals.png
@@ -52,59 +87,67 @@ image: {fig}/six_capitals.png
 
 In an emergency, minutes matter. So I asked a simple question of six European capitals: **how long does it take to drive from where people live to the nearest emergency department?**
 
-The answer is easier to see than to read. I started the clock at every A&E in a city at the same moment and let the road network light up as each street came within reach. The last streets to light up are the gaps.
+The answer is easier to see than to read. I started the clock at every A&E in each city at the same moment and let the road network light up as each street came within reach. The last streets to light up are the gaps.
 
-[Watch it for any of the six cities on the dashboard]({SITE}/race-to-ae/).
+{{{{< video {vid}/race_to_ae_six_capitals.mp4 >}}}}
+
+*All six capitals at once: the clock runs to 30 minutes in about 10 seconds.*
+
+[Play the race for any of the six cities on the dashboard]({SITE}/race-to-ae/), switch to busy traffic, or click anywhere to see how far the nearest A&E is.
 
 ## Comparing like with like
 
-Comparing capitals is harder than it looks, because their administrative boundaries mean different things: the City of Paris is tiny next to Greater London, and the Municipality of Rome includes farmland. So I used the same definition of a city everywhere, the **urban centre** from the UN and Eurostat's Degree of Urbanisation: all the neighbouring square kilometres with at least 1,500 residents each.
+Comparing capitals is harder than it looks, because their administrative boundaries mean very different things: the City of Paris is tiny next to Greater London, and the Municipality of Rome includes farmland. So I used the same definition of a city everywhere, the **urban centre** from the UN and Eurostat's Degree of Urbanisation: all the neighbouring square kilometres with at least 1,500 residents each.
 
 - **People:** the EU's Global Human Settlement Layer, population per 100 m square for 2025.
-- **Emergency departments:** Eurostat's European register of healthcare services, compiled from national health ministries and statistics offices, which marks hospitals that provide emergency care. The UK isn't in it, so for London I used OpenStreetMap hospitals tagged with an emergency department. Hospitals up to 8 km outside each urban centre count.
-- **Roads:** OpenStreetMap, with the same typical free-flow speeds in every city (lower where a lower limit is posted), and one-way streets respected.
+- **Emergency departments:** {"; and ".join(sources)}. Hospitals up to 8 km outside each urban centre count.
+- **Roads:** OpenStreetMap, with the same typical urban driving speeds in every city (lower where a lower limit is posted), and one-way streets respected.
 
 ## The race
 
-| City | People | A&Es | Within 10 min | Within 15 min | 15 min, busy traffic | Typical drive (min) | Slowest 10% (min+) |
-|---|---:|---:|---:|---:|---:|---:|---:|
-{rows}
+{headline}
 
-In order, from the most people within 15 minutes to the fewest: {join(names)}. In **{best['name']}**, **{p(best['within_15'])}** of people can reach an emergency department in 15 minutes on clear roads; in **{worst['name']}** it is **{p(worst['within_15'])}**. {spread}.
+| City | People | A&Es | Within 10 min | Within 15 min | Typical drive (min) | Slowest 10% (min+) |
+|---|---:|---:|---:|---:|---:|---:|
+{rows}
 
 ![Share of people who can reach an A&E within each number of minutes.]({fig}/coverage_curves.png){{.callout-figure}}
 
-## Traffic changes the ranking less than the map does
+## {lesson1_title}
 
-Free-flowing traffic is the best case. If every journey takes 50% longer, the share within 15 minutes falls everywhere, most in **{c[drop]['name']}**, from {p(c[drop]['within_15'])} to {p(c[drop]['within_15_busy'])}. Where the hospitals are matters more than how fast the traffic moves: a city with emergency departments spread across its neighbourhoods holds up much better than one where they cluster in the centre.
+{lesson1}
 
-![Within 15 minutes, with clear roads and busy traffic.]({fig}/within_15.png){{.callout-figure}}
+## Lesson two: it isn't just how many hospitals
 
-## Same scale, very different shapes
+{many['name']} has an emergency department for every {many['people_per_hospital'] / 1e3:.0f},000 people in its urban centre; {few['name']} has one for every {few['people_per_hospital'] / 1e3:.0f},000. Yet {few['name']} still gets {p(few['within_15'])} of people to an A&E within 15 minutes. What decides the wait is where the hospitals sit relative to where people live, and how well the roads connect them.
 
 ![Drive time to the nearest A&E, each city at the same scale.]({fig}/six_capitals.png){{.callout-figure}}
 
-The number of emergency departments is only part of the story. {c[per_h[0]]['name']} has one for every {c[per_h[0]]['people_per_hospital'] / 1e3:.0f},000 people in its urban centre and {c[per_h[-1]]['name']} one for every {c[per_h[-1]]['people_per_hospital'] / 1e3:.0f},000, but what decides the wait is where they sit relative to where people live, and how the roads connect them.
+## Lesson three: rush hour eats the margin
+
+The numbers above assume the roads are clear. If every journey takes 50% longer, being within 15 minutes means being within 10 minutes on clear roads, so the shares fall to the ten-minute column: from {p1(lo15)}–{p1(hi15)} to {p(w10['within_10'])}–{p(b10['within_10'])}. Rush hour turns a comfortable margin into a tight one.
+
+![Within 15 minutes, with clear roads and busy traffic.]({fig}/within_15.png){{.callout-figure}}
 
 ## What this doesn't tell you
 
-- **These are journeys to hospital, not ambulance response times.** Ambulances on blue lights are faster; most people with a sprained ankle drive or take a taxi.
+- **These are journeys to hospital, not ambulance response times.** Ambulances on blue lights are faster; most people with a broken wrist drive or take a taxi.
 - **Not every emergency department treats everything.** Major trauma, stroke and heart attack care is concentrated in fewer specialist centres.
-- **Registers differ.** Each country defines "emergency care" a little differently, and London's list comes from OpenStreetMap.
+- **Registers differ.** Each country defines "emergency care" a little differently, and {osm_count} of the {["none", "one", "two", "three", "four", "five", "six"][len(keys)] if len(keys) <= 6 else len(keys)} lists come from OpenStreetMap.{athens_note}
 - **Traffic is a single factor.** Real congestion varies by street and by hour.
 
 ## Then and now
 
-My pedestrian safety project measured drive times to London's four major trauma centres. This time the same method runs on six capitals with one command each, using open data from three different sources, and turns the results into an animation as well as a table.
+My [pedestrian safety project]({SITE}/london-pedestrian-safety/) measured drive times to London's four major trauma centres. This time the same idea runs on six capitals, with open data from three different sources, and turns into an animation as well as a table.
 
-As before, I worked with an AI assistant, Claude. The questions, the choice of a fair city definition and the judgement about what the numbers mean are mine. Everything was tested on a made-up city with known answers before it ran on real ones.
+As before, I worked with an AI assistant, Claude. The questions, the choice of a fair city definition, the review of the hospital lists and the judgement about what the numbers mean are mine. Everything was tested on a made-up city with known answers before it ran on real ones.
 
 - **Watch the race:** [{SITE.replace("https://", "")}/race-to-ae]({SITE}/race-to-ae/)
 - **Code and method:** [github.com/{REPO}](https://github.com/{REPO})
 
 ---
 
-*Data: © OpenStreetMap contributors (ODbL); European Commission JRC, Global Human Settlement Layer GHS-POP R2023A; Eurostat GISCO healthcare services. Drive times assume free-flowing traffic at typical urban speeds.*
+*Data: © OpenStreetMap contributors (ODbL); European Commission JRC, Global Human Settlement Layer GHS-POP R2023A (CC BY 4.0); Eurostat GISCO healthcare services. Drive times assume free-flowing traffic at typical urban speeds.*
 '''
 
 

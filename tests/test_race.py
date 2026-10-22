@@ -115,7 +115,7 @@ class FromOsmFile(unittest.TestCase):
         cls.root = Path(cls.tmp.name)
         cls.info = make_city.make(cls.root, city="london")
         osm = make_city.write_osm(cls.root / "city.osm", "london")
-        env = {**os.environ, "RACE_ROOT": str(cls.root)}
+        env = {**os.environ, "RACE_ROOT": str(cls.root), "RACE_HOSPITALS": str(cls.root / "no-overrides")}
         for step in ["02_network.py", "03_hospitals.py"]:
             r = subprocess.run([sys.executable, str(SCRIPTS / step), "--cities", "london", "--osm-file", str(osm)],
                                env=env, capture_output=True, text=True)
